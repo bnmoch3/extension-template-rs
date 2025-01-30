@@ -1,3 +1,7 @@
 [submodule "extension-ci-tools"]
 	path = extension-ci-tools
 	url = https://github.com/duckdb/extension-ci-tools
+[submodule "duckdb-rs"]
+	path = duckdb-rs
+	url = git@github.com:bnmoch3/duckdb-rs.git
+	branch = add-local-init
