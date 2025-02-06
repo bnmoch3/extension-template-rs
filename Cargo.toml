@@ -1,14 +1,16 @@
 [package]
-name = "rusty_quack"
+name = "duckdb_hello"
 version = "0.1.0"
 edition = "2021"
-
-[lib]
-crate-type = ["cdylib"]
 
 [profile.release]
 lto = true
 strip = true
+
+[lib]
+name = "hello"                  # name used for loading extension
+crate-type = ["cdylib", "rlib"]
+
 
 [[example]]
 # crate-type can't be (at the moment) be overriden for specific targets
@@ -21,7 +23,10 @@ crate-type = ["staticlib"]
 
 [dependencies]
 duckdb = { path = "./duckdb-rs/crates/duckdb", features = ["vtab-loadable"] }
-duckdb-loadable-macros = { path = "./duckdb-rs/crates/duckdb-loadable-macros" }
-libduckdb-sys = { path = "./duckdb-rs/crates/libduckdb-sys", features = [
-  "loadable-extension",
-] }
+duckdb-loadable-macros = { path = "./duckdb-rs/crates/duckdb-loadable-macros", default-features = false }
+libduckdb-sys = { path = "./duckdb-rs/crates/libduckdb-sys" }
+
+[features]
+loadable-extension = ["libduckdb-sys/loadable-extension"]
+buildtime_bindgen = ["duckdb/buildtime_bindgen"]
+bundled = ["duckdb/bundled"]
