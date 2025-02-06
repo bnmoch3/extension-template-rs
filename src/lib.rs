@@ -8,13 +8,15 @@ use duckdb_loadable_macros::duckdb_entrypoint_c_api;
 #[cfg(feature = "loadable-extension")]
 use duckdb::{ffi, Connection};
 
+use libduckdb_sys::duckdb_vector_size;
+
 use std::ffi::{c_char, CString};
 
 #[derive(Debug)]
 #[repr(C)]
 struct HelloBindData {
     name: *mut c_char,
-    count: u32,
+    count: usize,
 }
 
 impl Free for HelloBindData {
@@ -38,11 +40,12 @@ impl Free for HelloGlobalData {}
 #[repr(C)]
 #[derive(Debug)]
 struct HelloLocalData {
-    remaining: u32,
+    count: usize,
 }
 
 impl Free for HelloLocalData {}
 
+#[allow(dead_code)]
 struct HelloVTab;
 
 impl VTab for HelloVTab {
@@ -90,21 +93,22 @@ impl VTab for HelloVTab {
 
         if global_state.done {
             output.set_len(0);
-        } else {
-            let names_vec = output.flat_vector(0);
-            let name = CString::from_raw(bind_info.name);
-            let result = CString::new(format!(
-                "Hello {} {}",
-                name.to_str()?,
-                local_state.remaining
-            ))?;
-            bind_info.name = CString::into_raw(name);
-            names_vec.insert(0, result);
-            output.set_len(1);
-            local_state.remaining -= 1;
-            if local_state.remaining == 0 {
-                global_state.done = true;
-            }
+            return Ok(());
+        }
+
+        let chunk_size: usize = std::cmp::min(local_state.count, duckdb_vector_size() as usize);
+        let names_vec = output.flat_vector(0);
+        let name = CString::from_raw(bind_info.name);
+        let name_str: &str = name.to_str()?;
+        for i in 0..chunk_size {
+            let result = CString::new(format!("Hello {}", name_str))?;
+            names_vec.insert(i, result);
+        }
+        bind_info.name = CString::into_raw(name);
+        output.set_len(chunk_size.try_into()?);
+        local_state.count -= chunk_size;
+        if local_state.count == 0 {
+            global_state.done = true;
         }
         Ok(())
     }
@@ -129,11 +133,12 @@ impl VTabWithLocalData for HelloVTab {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let bind_data: &HelloBindData = unsafe { &*init_info.get_bind_data() };
         let local_data = unsafe { &mut *local_data };
-        local_data.remaining = bind_data.count;
+        local_data.count = bind_data.count;
         Ok(())
     }
 }
 
+#[allow(dead_code)]
 pub fn load_extension(conn: &duckdb::Connection) -> duckdb::Result<()> {
     conn.register_table_function_with_local_init::<HelloVTab>()?;
     Ok(())
@@ -162,7 +167,7 @@ mod tests {
         load_extension(&conn)?;
 
         let name = "Alice";
-        let count: i64 = 10;
+        let count: i64 = 1000;
         let got = conn.query_row(
             "select count(*) from hello(?, count=?)",
             params![name, count],

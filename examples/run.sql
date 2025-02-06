@@ -1,2 +1,2 @@
 load './build/debug/hello.duckdb_extension';
-select * from hello('Alice', count = 3);
+select * from hello('Alice', count = 10);
